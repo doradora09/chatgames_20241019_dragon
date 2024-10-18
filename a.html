@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ストーリー進行のページング</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .page {
+            display: none;
+        }
+        .page.active {
+            display: block;
+        }
+        .button-container {
+            margin-top: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <h1>ストーリー進行</h1>
+    <div id="story-container">
+        <div class="page active" id="page-1">
+            <p>ある日、勇者は小さな村に到着しました。村人たちは、最近現れたドラゴンの話をしていました。</p>
+        </div>
+        <div class="page" id="page-2">
+            <p>勇者はドラゴンに立ち向かうために、鍛冶屋で新しい剣を手に入れました。村の外れにドラゴンの巣があると聞きます。</p>
+        </div>
+        <div class="page" id="page-3">
+            <p>ついに勇者はドラゴンの巣に到着しました。巨大なドラゴンが彼を待ち受けています。</p>
+        </div>
+    </div>
+    <div class="button-container">
+        <button id="prev-button" onclick="prevPage()" disabled>前へ</button>
+        <button id="next-button" onclick="nextPage()">次へ</button>
+    </div>
+    <script>
+        let currentPage = 1;
+        const totalPages = 3;
+
+        function updatePage() {
+            for (let i = 1; i <= totalPages; i++) {
+                const page = document.getElementById(`page-${i}`);
+                if (i === currentPage) {
+                    page.classList.add('active');
+                } else {
+                    page.classList.remove('active');
+                }
+            }
+            document.getElementById('prev-button').disabled = currentPage === 1;
+            document.getElementById('next-button').disabled = currentPage === totalPages;
+        }
+
+        function nextPage() {
+            if (currentPage < totalPages) {
+                currentPage++;
+                updatePage();
+            }
+        }
+
+        function prevPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                updatePage();
+            }
+        }
+    </script>
+<div class="button-container">
+        <a href="data:text/html;charset=utf-8,<!DOCTYPE html>%0A<html lang='ja'>%0A<head>%0A<meta charset='UTF-8'>%0A<meta name='viewport' content='width=device-width, initial-scale=1.0'>%0A<title>ストーリー進行のページング</title>%0A<style>%0Abody { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; }%0A.page { display: none; }%0A.page.active { display: block; }%0A.button-container { margin-top: 20px; }%0Abutton { padding: 10px 20px; font-size: 16px; }%0A</style>%0A</head>%0A<body>%0A<h1>ストーリー進行</h1>%0A<div id='story-container'>%0A<div class='page active' id='page-1'><p>ある日、勇者は小さな村に到着しました。村人たちは、最近現れたドラゴンの話をしていました。</p></div>%0A<div class='page' id='page-2'><p>勇者はドラゴンに立ち向かうために、鍛冶屋で新しい剣を手に入れました。村の外れにドラゴンの巣があると聞きます。</p></div>%0A<div class='page' id='page-3'><p>ついに勇者はドラゴンの巣に到着しました。巨大なドラゴンが彼を待ち受けています。</p></div>%0A</div>%0A<div class='button-container'>%0A<button id='prev-button' onclick='prevPage()' disabled>前へ</button>%0A<button id='next-button' onclick='nextPage()'>次へ</button>%0A</div>%0A<script>%0Alet currentPage = 1;%0Aconst totalPages = 3;%0Afunction updatePage() { for (let i = 1; i <= totalPages; i++) { const page = document.getElementById(`page-${i}`); if (i === currentPage) { page.classList.add('active'); } else { page.classList.remove('active'); } } document.getElementById('prev-button').disabled = currentPage === 1; document.getElementById('next-button').disabled = currentPage === totalPages; }%0Afunction nextPage() { if (currentPage < totalPages) { currentPage++; updatePage(); } }%0Afunction prevPage() { if (currentPage > 1) { currentPage--; updatePage(); } }%0A</script>%0A</body>%0A</html>" download="story_progress.html">ストーリーをダウンロード</a>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ドラゴンスレイヤー - 冒険の始まり</title>
+    <style>
+        /* 基本スタイル */
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            background-color: #f0f0f0;
+        }
+        .page {
+            display: none;
+        }
+        .page.active {
+            display: block;
+        }
+        .button-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 5px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background-color: #4CAF50;
+            color: white;
+            transition: background-color 0.3s;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        button:hover:not(:disabled) {
+            background-color: #45a049;
+        }
+        #dice-animation {
+            font-size: 2em;
+            text-align: center;
+            margin: 20px 0;
+            display: none;
+        }
+        #status-container {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #ffffff;
+            border-radius: 5px;
+        }
+        #status-container p {
+            margin: 5px 0;
+        }
+        #battle-log {
+            margin-bottom: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 10px;
+            border: 1px solid #ddd;
+            background-color: #fff;
+            border-radius: 5px;
+        }
+        #battle-log p {
+            margin: 5px 0;
+        }
+        #version-number {
+            text-align: right;
+            font-size: 0.9em;
+            color: #666;
+        }
+        /* ダイス結果のスタイル */
+        #dice-result-text {
+            font-size: 2em;
+            text-align: center;
+            margin-top: 10px;
+            display: none;
+        }
+        /* エンディングタイトルのスタイル */
+        #ending-title {
+            font-size: 2.5em;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        /* 成功基準の説明スタイル */
+        #success-criteria {
+            font-size: 1.2em;
+            margin-top: 10px;
+            text-align: center;
+            color: #333;
+        }
+        /* 中央配置の画像スタイル */
+        .centered-image {
+            display: block;
+            margin: 20px auto;
+            width: 80%; /* 横長の長方形に合わせて幅を80%に調整 */
+            max-height: 30vh; /* 縦幅をビューポート高さの30%に制限 */
+            height: auto;
+            border-radius: 10px;
+            object-fit: contain; /* 画像が縦横比を保ちながら収まるように */
+        }
+        /* オープニングの説明文スタイル */
+        #opening-description {
+            font-size: 1.2em;
+            margin-top: 20px;
+            text-align: center;
+            color: #333;
+        }
+        /* スタッフロール（クレジット）ページのスタイル */
+        #credits-container {
+            margin-top: 20px;
+            text-align: center;
+            overflow: hidden;
+            position: relative;
+            height: 300px; /* スクロールエリアの高さ */
+        }
+        #credits-content {
+            position: absolute;
+            width: 100%;
+            animation: scrollCredits 20s linear forwards;
+        }
+        #credits-list {
+            list-style: none;
+            padding: 0;
+            margin: 20px 0;
+            font-size: 1.2em;
+        }
+        #credits-list li {
+            margin: 10px 0;
+        }
+        /* スクロールアニメーション */
+        @keyframes scrollCredits {
+            from { transform: translateY(100%); }
+            to { transform: translateY(-100%); }
+        }
+    </style>
+
+    <script>
+        let currentPage = 0; // 初期ページをスタート画面に設定
+        const totalPages = 8; // ページ数を8に設定（スタッフロールを含む）
+        let equipment = "木の棒";
+        let winRateModifier = 0;
+        let playerHP = 100;
+        let dragonHP = 150;
+        let turnCount = 0;
+
+        const pageImages = {
+            0: ['game_start.png'], // スタート画面の画像をgame_start.pngに変更
+            1: ['opening_screen.png'], // オープニング画面の画像
+            2: ['village_scene_1.png'],
+            3: ['hero_blacksmith_1.png'],
+            4: ['weapon_acquisition.png'],
+            5: ['dragon_lair_1.png'],
+            6: ['ending_scene_1.png'],
+            7: ['staff_role.png'], // スタッフロール背景画像をstaff_role.pngに変更
+            'defeat': ['defeat_scene_1.png']
+        };
+
+        // オーディオ要素の取得
+        let bgm_opening, bgm_village, bgm_ending, bgm_boss, bgm_bad_ending;
+        let se_roll_dice, se_attack, se_victory, se_defeat;
+        let se_shock6, se_dragon_fire, se_sword_slash2, se_sword_swing1, se_battle_entry, se_dice;
+        let se_down_se; // 新しい敗北SE
+
+        function initializeAudioElements() {
+            bgm_opening = document.getElementById('bgm_opening');
+            bgm_village = document.getElementById('bgm_village');
+            bgm_ending = document.getElementById('bgm_ending');
+            bgm_boss = document.getElementById('bgm_boss'); // 戦闘BGM
+            bgm_bad_ending = document.getElementById('bgm_bad_ending'); // 悪いエンディングBGM
+
+            se_roll_dice = document.getElementById('se_roll_dice');
+            se_attack = document.getElementById('se_attack');
+            se_victory = document.getElementById('se_victory');
+            se_defeat = document.getElementById('se_defeat');
+
+            // 新しいSEの取得
+            se_shock6 = document.getElementById('se_shock6');
+            se_dragon_fire = document.getElementById('se_dragon_fire');
+            se_sword_slash2 = document.getElementById('se_sword_slash2');
+            se_sword_swing1 = document.getElementById('se_sword_swing1');
+            se_battle_entry = document.getElementById('se_battle_entry');
+            se_dice = document.getElementById('se_dice');
+            se_down_se = document.getElementById('se_down_se'); // 新しい敗北SE
+
+            // 音量調整（必要に応じて変更）
+            if (bgm_opening) bgm_opening.volume = 0.5;
+            if (bgm_village) bgm_village.volume = 0.5;
+            if (bgm_boss) bgm_boss.volume = 0.5;
+            if (bgm_bad_ending) bgm_bad_ending.volume = 0.5;
+            if (bgm_ending) bgm_ending.volume = 0.5;
+
+            if (se_roll_dice) se_roll_dice.volume = 0.75;
+            if (se_attack) se_attack.volume = 0.75;
+            if (se_victory) se_victory.volume = 0.75;
+            if (se_defeat) se_defeat.volume = 0.75;
+
+            if (se_shock6) se_shock6.volume = 0.75;
+            if (se_dragon_fire) se_dragon_fire.volume = 0.75;
+            if (se_sword_slash2) se_sword_slash2.volume = 0.75;
+            if (se_sword_swing1) se_sword_swing1.volume = 0.75;
+            if (se_battle_entry) se_battle_entry.volume = 0.75;
+            if (se_dice) se_dice.volume = 0.75;
+            if (se_down_se) se_down_se.volume = 0.75; // 新しい敗北SEの音量調整
+        }
+
+        // ミュート状態を管理するフラグ
+        let isMuted = false;
+        let currentBGM = null; // 現在再生中のBGMを追跡
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            // 全てのオーディオ要素のミュート状態を切り替える
+            if (bgm_opening && bgm_village && bgm_ending && bgm_boss && bgm_bad_ending) {
+                bgm_opening.muted = isMuted;
+                bgm_village.muted = isMuted;
+                bgm_ending.muted = isMuted;
+                bgm_boss.muted = isMuted;
+                bgm_bad_ending.muted = isMuted;
+            }
+            if (se_roll_dice && se_attack && se_victory && se_defeat &&
+                se_shock6 && se_dragon_fire && se_sword_slash2 &&
+                se_sword_swing1 && se_battle_entry && se_dice && se_down_se) {
+                se_roll_dice.muted = isMuted;
+                se_attack.muted = isMuted;
+                se_victory.muted = isMuted;
+                se_defeat.muted = isMuted;
+                se_shock6.muted = isMuted;
+                se_dragon_fire.muted = isMuted;
+                se_sword_slash2.muted = isMuted;
+                se_sword_swing1.muted = isMuted;
+                se_battle_entry.muted = isMuted;
+                se_dice.muted = isMuted;
+                se_down_se.muted = isMuted;
+            }
+
+            // ボタンのテキストを変更
+            document.getElementById('mute-button').textContent = isMuted ? 'ミュート解除' : 'ミュート';
+        }
+
+        function playBGM(bgm) {
+            if (currentBGM === bgm) {
+                // 同じBGMが既に再生中の場合は何もしない
+                return;
+            }
+
+            // 全てのBGMを停止
+            if (bgm_opening) {
+                bgm_opening.pause();
+                bgm_opening.currentTime = 0;
+            }
+            if (bgm_village) {
+                bgm_village.pause();
+                bgm_village.currentTime = 0;
+            }
+            if (bgm_boss) {
+                bgm_boss.pause();
+                bgm_boss.currentTime = 0;
+            }
+            if (bgm_bad_ending) {
+                bgm_bad_ending.pause();
+                bgm_bad_ending.currentTime = 0;
+            }
+            if (bgm_ending) {
+                bgm_ending.pause();
+                bgm_ending.currentTime = 0;
+            }
+
+            // 指定されたBGMを再生
+            if (bgm && !isMuted) {
+                bgm.play();
+                currentBGM = bgm;
+            } else {
+                currentBGM = null;
+            }
+        }
+
+        function playSE(se) {
+            if (se && !isMuted) {
+                se.currentTime = 0; // 再生位置をリセット
+                se.play();
+            }
+        }
+
+        function rollDice() {
+            return Math.floor(Math.random() * 20) + 1;
+        }
+
+        function updatePage() {
+            // 全ページを非表示にする
+            const allPages = document.querySelectorAll('.page');
+            allPages.forEach(page => page.classList.remove('active'));
+
+            // 現在のページを表示
+            const page = document.getElementById(`page-${currentPage}`);
+            if (page) {
+                page.classList.add('active');
+                setPageImage(currentPage);
+                if (currentPage !== 1 && currentPage !== 0 && currentPage !== 7 && currentPage !== 'defeat') {
+                    document.getElementById('dice-result-text').style.display = 'none';
+                    document.getElementById('dice-result-image').style.display = 'none';
+                }
+
+                // シーンに応じてBGMを再生
+                if (currentPage === 1) {
+                    playBGM(bgm_opening);
+                } else if (currentPage === 2 || currentPage === 3 || currentPage === 4) {
+                    playBGM(bgm_opening); // オープニングから武器獲得まではオープニングBGMを継続
+                } else if (currentPage === 5) { // ページ5がドラゴン戦闘
+                    // 戦闘BGMは prepareDragonBattle 関数内で再生
+                    prepareDragonBattle();
+                } else if (currentPage === 6) { // ページ6がエンディング
+                    // エンディングBGMは prepareVictory 関数内で再生
+                    // このページに到達した時点で既に prepareVictory でBGMが再生されている
+                    showEnding(); // エンディングページに入った際に累積ターン数を表示
+                } else if (currentPage === 7) { // ページ7がスタッフロール
+                    // スタッフロール用の画像を表示（staff_role.png）
+                    playBGM(bgm_ending);
+                } else if (currentPage === 'defeat') {
+                    playSE(se_down_se); // 敗北時の新しいSEを再生
+                }
+            }
+
+            // 敗北ページの処理
+            if (currentPage === 'defeat') {
+                const defeatPage = document.getElementById('defeat');
+                if (defeatPage) {
+                    defeatPage.classList.add('active');
+                    setPageImage('defeat');
+                }
+            }
+
+            // 現在のページに対応するボタンを有効化・無効化
+            const currentButton = document.querySelector(`#page-${currentPage} .button-container button`);
+            if (currentButton) {
+                if (currentPage === totalPages || (currentPage === 6 && dragonHP > 0)) {
+                    currentButton.disabled = true;
+                } else {
+                    currentButton.disabled = false;
+                }
+            }
+
+            updateStatus();
+
+            // Nextボタンのテキストを変更
+            const buttonElement = document.querySelector(`#page-${currentPage} .button-container button`);
+            if (buttonElement) {
+                if (currentPage === 0) {
+                    buttonElement.textContent = 'スタート';
+                } else if (currentPage === 7) {
+                    buttonElement.textContent = 'トップに戻る';
+                } else {
+                    buttonElement.textContent = '次へ';
+                }
+            }
+        }
+
+        function setPageImage(pageNumber) {
+            const page = document.getElementById(`page-${pageNumber}`);
+            if (!page) return;
+            const imgElement = page.querySelector('img.centered-image');
+            if (imgElement) {
+                if (pageImages[pageNumber] && pageImages[pageNumber].length > 0) {
+                    const images = pageImages[pageNumber];
+                    imgElement.src = images[0];
+                }
+            }
+        }
+
+        function nextPage() {
+            if (currentPage < totalPages) {
+                if (currentPage === 0) {
+                    // スタート画面からオープニングへ進む
+                    currentPage++;
+                    updatePage();
+                } else if (currentPage === 1) {
+                    // オープニング画面から村へ進む
+                    currentPage++;
+                    updatePage();
+                } else if (currentPage === 2) {
+                    // 村から鍛冶屋へ進む
+                    currentPage++;
+                    updatePage();
+                } else if (currentPage === 3) {
+                    // 鍛冶屋から武器獲得シーンへ（ダイスロール後に進むためここでは何もしない）
+                    // ダイスロールが成功した場合にページ4へ進む
+                } else if (currentPage === 4) {
+                    // 武器獲得シーンからドラゴン戦闘へ
+                    currentPage++;
+                    updatePage();
+                } else if (currentPage === 5) {
+                    // ドラゴン戦闘からエンディングへ
+                    // ドラゴン戦闘中に勝利または敗北が決まるため、ここでは何もしない
+                } else if (currentPage === 6) {
+                    // エンディングからスタッフロールへ
+                    currentPage++;
+                    updatePage();
+                } else if (currentPage === 7) {
+                    // スタッフロールからトップに戻るへ
+                    resetGame();
+                }
+            }
+        }
+
+        function animateDiceRollForWeapon() {
+            const diceAnimation = document.getElementById('dice-animation');
+            const resultText = document.getElementById('dice-result-text');
+            const diceResultImage = document.getElementById('dice-result-image');
+
+            diceAnimation.style.display = 'block';
+            diceAnimation.textContent = 'ダイスを振っています...';
+            resultText.textContent = '';
+            diceResultImage.style.display = 'none';
+
+            // ダイスを振るSEを再生（dice.mp3）
+            playSE(se_dice);
+
+            setTimeout(() => {
+                const result = rollDice();
+                const effectiveResult = result + winRateModifier / 10;
+                const outcome = effectiveResult >= 10 ? '成功' : '失敗';
+                const imagePath = outcome === '成功' ? 'victory_scene.png' : 'failure_scene.png'; // 失敗時は一般的な失敗画像を使用
+
+                diceAnimation.style.display = 'none';
+                resultText.textContent = `ダイスの結果: ${result} + 勝率修正 (${winRateModifier}%) = ${effectiveResult.toFixed(1)} (${outcome})`;
+                diceResultImage.src = imagePath;
+                diceResultImage.alt = outcome;
+                diceResultImage.style.display = 'block';
+                resultText.style.display = 'block';
+
+                if (outcome === '成功') {
+                    equipment = "鋼の剣";
+                    winRateModifier = 25;
+                    // 成功メッセージの追加
+                    resultText.textContent += ' - 武器の取得に成功しました！';
+                    currentPage++;
+                    updatePage();
+                    // 武器取得時のSEを再生（以前のジャジャーンを削除）
+                } else {
+                    resultText.textContent += ' - 武器の取得に失敗しました。再挑戦してください。';
+                    // 失敗時のSEは不要
+                }
+                // 武器作成時にもターンをカウント
+                turnCount++;
+                updateStatus();
+            }, 2000);
+        }
+
+        function prepareDragonBattle() {
+            const battleLog = document.getElementById('battle-log');
+            battleLog.innerHTML = '<p>勇者はついにドラゴンと対峙しました。ドラゴンとの戦いが始まります！</p><strong>ドラゴンとの戦いが始まった！</strong><br>';
+            playerHP = 100;
+            dragonHP = 150;
+            // turnCount = 0; // ここを削除して累積ターン数を保持
+            updateStatus();
+
+            // 現在再生中のBGMを停止
+            if (bgm_opening) {
+                bgm_opening.pause();
+                bgm_opening.currentTime = 0;
+            }
+            if (bgm_village) {
+                bgm_village.pause();
+                bgm_village.currentTime = 0;
+            }
+            if (bgm_ending) {
+                bgm_ending.pause();
+                bgm_ending.currentTime = 0;
+            }
+            if (bgm_bad_ending) {
+                bgm_bad_ending.pause();
+                bgm_bad_ending.currentTime = 0;
+            }
+
+            // 戦闘開始時のSEを再生（battle_entry.mp3）
+            playSE(se_battle_entry);
+
+            // SEの再生が終了したら戦闘BGMを再生し、ターンボタンを表示
+            se_battle_entry.onended = function() {
+                playBGM(bgm_boss); // dragon_slayer_boss.mp3を再生
+                document.getElementById('turn-button').style.display = 'block';
+            };
+        }
+
+        function nextTurn() {
+            const battleLog = document.getElementById('battle-log');
+            const turnButton = document.getElementById('turn-button');
+
+            turnButton.disabled = true; // 連打防止
+
+            setTimeout(() => {
+                turnCount++;
+                if (playerHP <= 0 || dragonHP <= 0) {
+                    if (playerHP <= 0) {
+                        logBattleEvent('<strong>勇者は倒された... 敗北...</strong>');
+                        turnButton.style.display = 'none';
+                        currentPage = 'defeat';
+                        updatePage();
+                        // 勇者が敗北した場合のSEを再生（down_se.mp3）
+                        playSE(se_down_se);
+                        // 敗北時に戦闘BGMを停止
+                        if (bgm_boss) {
+                            bgm_boss.pause();
+                            bgm_boss.currentTime = 0;
+                        }
+                        if (bgm_bad_ending) {
+                            bgm_bad_ending.pause();
+                            bgm_bad_ending.currentTime = 0;
+                            // 敗北時の悪いエンディングBGMを再生
+                            playBGM(bgm_bad_ending);
+                        }
+                        return; // ここで処理を終了
+                    } else if (dragonHP <= 0) {
+                        logBattleEvent('<strong>ドラゴンを倒した！ 勝利！</strong>');
+                        turnButton.style.display = 'none';
+                        // 勝利後に自動でエンディングへ遷移
+                        // 勝利時のSEを2秒遅延で再生（dragon_fire.mp3のみ）
+                        setTimeout(() => {
+                            playSE(se_dragon_fire);
+                            // dragon_fire.mp3が終了したらエンディングBGMを再生し、エンディングページに遷移
+                            se_dragon_fire.onended = function() {
+                                playBGM(bgm_ending);
+                                currentPage++;
+                                updatePage(); // 自動的にエンディングページに遷移
+                            };
+                        }, 2000); // 2秒待ってからSEを再生
+                        return; // ここで処理を終了
+                    }
+                }
+
+                const playerRoll = rollDice() + winRateModifier / 10;
+                const dragonRoll = rollDice();
+
+                if (playerRoll >= 10) {
+                    const playerDamage = Math.floor(Math.random() * 10) + 10;
+                    dragonHP -= playerDamage;
+                    if (dragonHP < 0) dragonHP = 0;
+                    logBattleEvent(`勇者の攻撃がヒット！ ドラゴンに<span style="color: red;">${playerDamage}ダメージ</span>！（ドラゴンのHP: ${dragonHP}）`);
+                    // 攻撃が当たった場合のSEを再生（sword_slash2.mp3）
+                    playSE(se_sword_slash2);
+                } else {
+                    logBattleEvent('<span style="color: orange;">勇者の攻撃は外れた...</span>');
+                    // 攻撃が外れた場合のSEを再生（sword_swing1.mp3）
+                    playSE(se_sword_swing1);
+                }
+
+                if (dragonHP > 0 && dragonRoll >= 12) {
+                    const dragonDamage = Math.floor(Math.random() * 10) + 5;
+                    playerHP -= dragonDamage;
+                    if (playerHP < 0) playerHP = 0;
+                    logBattleEvent(`ドラゴンの攻撃がヒット！ 勇者に<span style="color: red;">${dragonDamage}ダメージ</span>！（勇者のHP: ${playerHP}）`);
+                    // ドラゴンの攻撃を受けた場合のSEを再生（dragon_fire.mp3）
+                    playSE(se_dragon_fire);
+                } else if (dragonHP > 0) {
+                    logBattleEvent('<span style="color: orange;">ドラゴンの攻撃を回避した...</span>');
+                    // ドラゴンの攻撃が外れた場合はSEを再生しない
+                }
+                updateStatus();
+                turnButton.disabled = false; // ボタンを再度有効化
+            }, 1000);
+        }
+
+        function logBattleEvent(message) {
+            const battleLog = document.getElementById('battle-log');
+            const newMessage = document.createElement('p');
+            newMessage.innerHTML = message;
+            battleLog.appendChild(newMessage);
+            battleLog.scrollTop = battleLog.scrollHeight;
+        }
+
+        function updateStatus() {
+            const equipmentElement = document.getElementById('equipment-status');
+            const winRateElement = document.getElementById('win-rate-status');
+            const playerHPElement = document.getElementById('player-hp-status');
+            const dragonHPElement = document.getElementById('dragon-hp-status');
+            const turnCountElement = document.getElementById('turn-count-status');
+
+            equipmentElement.textContent = `現在の装備: ${equipment}`;
+            winRateElement.textContent = `現在の勝率修正: ${winRateModifier}%`;
+            playerHPElement.textContent = `勇者のHP: ${playerHP}`;
+            dragonHPElement.textContent = `ドラゴンのHP: ${dragonHP}`;
+            turnCountElement.textContent = `累積ターン数: ${turnCount}`;
+        }
+
+        function showEnding() {
+            const endingTurnCount = document.getElementById('ending-turn-count');
+            const titleElement = document.getElementById('ending-title');
+            if (endingTurnCount) {
+                endingTurnCount.textContent = turnCount;
+            }
+            if (titleElement) {
+                let title = "勇者";
+                if (turnCount <= 10) {
+                    title = "速攻の勇者";
+                } else if (turnCount <= 20) {
+                    title = "巧妙なる勇者";
+                } else {
+                    title = "粘り強い勇者";
+                }
+                titleElement.textContent = title;
+            }
+        }
+
+        function resetGame() {
+            // 全てのBGMを停止
+            if (bgm_opening) {
+                bgm_opening.pause();
+                bgm_opening.currentTime = 0;
+            }
+            if (bgm_village) {
+                bgm_village.pause();
+                bgm_village.currentTime = 0;
+            }
+            if (bgm_boss) {
+                bgm_boss.pause();
+                bgm_boss.currentTime = 0;
+            }
+            if (bgm_bad_ending) {
+                bgm_bad_ending.pause();
+                bgm_bad_ending.currentTime = 0;
+            }
+            if (bgm_ending) {
+                bgm_ending.pause();
+                bgm_ending.currentTime = 0;
+            }
+
+            // SE音も停止
+            const allSEs = [se_roll_dice, se_attack, se_victory, se_defeat, se_shock6, se_dragon_fire, se_sword_slash2, se_sword_swing1, se_battle_entry, se_dice, se_down_se];
+            allSEs.forEach(se => {
+                if (se) {
+                    se.pause();
+                    se.currentTime = 0;
+                }
+            });
+
+            // ゲームの状態を初期化
+            currentPage = 0;
+            equipment = "木の棒";
+            winRateModifier = 0;
+            playerHP = 100;
+            dragonHP = 150;
+            turnCount = 0;
+            updateStatus();
+            updatePage();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeAudioElements();
+            updatePage();
+        });
+
+        // 「スタート」ボタンのクリックイベント
+        function startGame() {
+            // オーディオ再生をユーザー操作に結びつける
+            playBGM(bgm_opening);
+            // ページをオープニング画面に遷移
+            currentPage = 1;
+            updatePage();
+        }
+    </script>
+</head>
+<body>
+    <div id="version-number">修正版 3.4</div>
+    <div id="status-container">
+        <p id="equipment-status">現在の装備: 木の棒</p>
+        <p id="win-rate-status">現在の勝率修正: 0%</p>
+        <p id="player-hp-status">勇者のHP: 100</p>
+        <p id="dragon-hp-status">ドラゴンのHP: 150</p>
+        <p id="turn-count-status">累積ターン数: 0</p>
+    </div>
+    
+    <div id="story-container">
+        <!-- ページ0: スタート画面 -->
+        <div class="page active" id="page-0">
+            <img src="game_start.png" alt="スタート画面" class="centered-image"> <!-- 画像をgame_start.pngに変更 -->
+            <div class="button-container">
+                <button onclick="startGame()">スタート</button>
+            </div>
+        </div>
+
+        <!-- ページ1: オープニング画面 -->
+        <div class="page" id="page-1">
+            <img src="opening_screen.png" alt="オープニング画面" class="centered-image">
+            <p><strong>あらすじ:</strong></p>
+            <p>古の時代、平和な村に突如として現れたドラゴンが村を脅かしています。勇者として選ばれたあなたは、村を救うためドラゴンを討伐する旅に出ます。</p>
+            <p id="opening-description">
+                <strong>ゲームの説明:</strong><br>
+                このゲームでは、勇者としてドラゴンを倒すまでのターン数を競います。少ないターン数でクリアすることを目指してください。運と戦略が鍵となります。
+            </p>
+            <div class="button-container">
+                <button onclick="nextPage()">次へ</button>
+            </div>
+        </div>
+
+        <!-- ページ2: 最初の街 -->
+        <div class="page" id="page-2">
+            <img src="village_scene_1.png" alt="村の風景" class="centered-image">
+            <p>勇者は小さな村に到着しました。村人たちは、最近現れたドラゴンの話をしていました。勇者は村を守るため、ドラゴンを倒す決意を固めます。</p>
+            <div class="button-container">
+                <button onclick="nextPage()">次へ</button>
+            </div>
+        </div>
+
+        <!-- ページ3: 鍛冶屋 -->
+        <div class="page" id="page-3">
+            <img src="hero_blacksmith_1.png" alt="鍛冶屋で剣を手に入れる勇者" class="centered-image">
+            <p>勇者はドラゴンに立ち向かうために、鍛冶屋で新しい剣を手に入れました。鋼の剣はドラゴンに対抗するための重要な武器です。装備を強化し、村の外れにあるドラゴンの巣へ向かいます。</p>
+            <div class="button-container">
+                <button onclick="animateDiceRollForWeapon()">ダイスを振る</button>
+            </div>
+        </div>
+
+        <!-- ページ4: 武器獲得シーン -->
+        <div class="page" id="page-4">
+            <img src="weapon_acquisition.png" alt="鋼の剣を手に入れた勇者" class="centered-image">
+            <p>鍛冶屋で鋼の剣を手に入れた勇者は、装備を強化し、ドラゴンとの戦いに備えました。新たな装備は勇者の勝率修正を高め、戦闘を有利に進めることができます。</p>
+            <div class="button-container">
+                <button onclick="nextPage()">次へ</button>
+            </div>
+        </div>
+
+        <!-- ページ5: ドラゴンの巣 -->
+        <div class="page" id="page-5">
+            <img src="dragon_lair_1.png" alt="ドラゴンの巣に到着した勇者" class="centered-image">
+            <p>ついに勇者はドラゴンの巣に到着しました。巨大なドラゴンが彼を待ち受けています。勇者はドラゴンとの戦いに挑みます。</p>
+            <div id="success-criteria"><strong>成功基準:</strong> ダイスの目 + 勝率修正 ≥ <strong>10</strong>で成功</div>
+            <div id="battle-log"></div>
+            <button id="turn-button" onclick="nextTurn()" style="display: none;">次のターン</button>
+            <!-- 重複していた「次へ」ボタンを削除 -->
+        </div>
+
+        <!-- ページ6: エンディング -->
+        <div class="page" id="page-6">
+            <h2 id="ending-title">勇者</h2>
+            <img src="ending_scene_1.png" alt="エンディング" class="centered-image">
+            <p>勇者はついにドラゴンを打ち倒し、村に平和を取り戻しました。村人たちは勇者を英雄として讃え、盛大な祝宴が開かれました。</p>
+            <p>これにより、勇者の冒険はひとまず終わりを迎えました。しかし、彼の伝説は語り継がれ、次なる冒険への序章となることでしょう。</p>
+            <p>累積ターン数: <span id="ending-turn-count">0</span></p>
+            <div class="button-container">
+                <button onclick="nextPage()">次へ</button>
+            </div>
+        </div>
+
+        <!-- ページ7: スタッフロール（クレジット） -->
+        <div class="page" id="page-7">
+            <img src="staff_role.png" alt="スタッフロール背景" class="centered-image"> <!-- 画像をstaff_role.pngに変更 -->
+            <div id="credits-container">
+                <div id="credits-content">
+                    <ul id="credits-list">
+                        <li><strong>デザイン:</strong> Nobuaki Oshiro</li>
+                        <li><strong>サウンド:</strong> Suno3.5</li>
+                        <li><strong>アートワーク:</strong> DALLE</li>
+                        <li><strong>プログラミング:</strong> ChatGPT</li>
+                        <li><strong>テストプレイ:</strong> ゲーム愛好家たち</li>
+                        <li><strong>特別感謝:</strong> 全てのプレイヤー</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="button-container">
+                <button onclick="resetGame()">トップに戻る</button>
+            </div>
+        </div>
+
+        <!-- ページ8: 敗北 -->
+        <div class="page" id="defeat">
+            <img src="defeat_scene_1.png" alt="敗北" class="centered-image">
+            <p>勇者はドラゴンに敗れ、命を落としてしまいました。村は再びドラゴンの脅威にさらされることとなりました。</p>
+            <div class="button-container">
+                <button onclick="resetGame()">再挑戦</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="button-container">
+        <button id="mute-button" onclick="toggleMute()">ミュート</button>
+    </div>
+    <div id="dice-animation">ダイスを振っています...</div>
+    <p id="dice-result-text"></p>
+    <img id="dice-result-image" src="" alt="" class="centered-image" style="width:50%; height:auto; display:none;">
+
+    <!-- オーディオ要素の追加 -->
+    <!-- オープニングBGM -->
+    <audio id="bgm_opening" src="dragon_slayer.mp3" loop preload="auto"></audio>
+    <!-- 戦闘BGM -->
+    <audio id="bgm_boss" src="dragon_slayer_boss.mp3" loop preload="auto"></audio>
+    <!-- 悪いエンディングBGM -->
+    <audio id="bgm_bad_ending" src="dragon_slayer_bad_ending.mp3" loop preload="auto"></audio>
+    <!-- エンディングBGM -->
+    <audio id="bgm_ending" src="dragon_slayer_ending.mp3" loop preload="auto"></audio>
+    <!-- 他のBGM -->
+    <audio id="bgm_village" src="bgm_village.mp3" loop preload="auto"></audio>
+    <!-- SE -->
+    <audio id="se_roll_dice" src="se_roll_dice.mp3" preload="auto"></audio>
+    <audio id="se_attack" src="se_attack.mp3" preload="auto"></audio>
+    <audio id="se_victory" src="se_victory.mp3" preload="auto"></audio>
+    <audio id="se_defeat" src="down_se.mp3" preload="auto"></audio> <!-- 敗北時のSEをdown_se.mp3に変更 -->
+    <!-- 提供された新しいSEの追加 -->
+    <audio id="se_shock6" src="shock6.mp3" preload="auto"></audio>
+    <audio id="se_dragon_fire" src="dragon_fire.mp3" preload="auto"></audio>
+    <audio id="se_sword_slash2" src="sword_slash2.mp3" preload="auto"></audio>
+    <audio id="se_sword_swing1" src="sword_swing1.mp3" preload="auto"></audio>
+    <audio id="se_battle_entry" src="battle_entry.mp3" preload="auto"></audio>
+    <audio id="se_dice" src="dice.mp3" preload="auto"></audio>
+    <!-- 新しい敗北SE -->
+    <audio id="se_down_se" src="down_se.mp3" preload="auto"></audio>
+</body>
+</html>

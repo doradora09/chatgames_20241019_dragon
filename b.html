@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ストーリー進行のページング</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            background-color: #f0f0f0;
+        }
+        .page {
+            display: none;
+        }
+        .page.active {
+            display: block;
+        }
+        .button-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 5px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background-color: #4CAF50;
+            color: white;
+            transition: background-color 0.3s;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        button:hover:not(:disabled) {
+            background-color: #45a049;
+        }
+        #dice-animation {
+            font-size: 2em;
+            text-align: center;
+            margin: 20px 0;
+            display: none;
+        }
+        #status-container {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background-color: #ffffff;
+            border-radius: 5px;
+        }
+        #status-container p {
+            margin: 5px 0;
+        }
+        #battle-log {
+            margin-bottom: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 10px;
+            border: 1px solid #ddd;
+            background-color: #fff;
+            border-radius: 5px;
+        }
+        #battle-log p {
+            margin: 5px 0;
+        }
+        #version-number {
+            text-align: right;
+            font-size: 0.9em;
+            color: #666;
+        }
+        /* ダイス結果のフォントサイズを大きく */
+        #dice-result-text {
+            font-size: 2em;
+            text-align: center;
+            margin-top: 10px;
+            display: none;
+        }
+        /* エンディングタイトルのフォントサイズを大きく */
+        #ending-title {
+            font-size: 2.5em;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        /* 成功基準の説明スタイル */
+        #success-criteria {
+            font-size: 1.2em;
+            margin-top: 10px;
+            text-align: center;
+            color: #333;
+        }
+        .centered-image {
+            display: block;
+            margin: 20px auto;
+            width: 40%;
+            height: auto;
+            border-radius: 10px;
+        }
+    </style>
+
+    <script>
+        let currentPage = 1;
+        const totalPages = 4;
+        let equipment = "木の棒";
+        let winRateModifier = 0;
+        let playerHP = 100;
+        let dragonHP = 150;
+        let turnCount = 0;
+
+        const pageImages = {
+            1: ['village_scene_1.png'],
+            2: ['hero_blacksmith_1.png'],
+            3: ['dragon_lair_1.png'],
+            4: ['ending_scene_1.png'],
+            'defeat': ['defeat_scene_1.png']
+        };
+
+        function rollDice() {
+            return Math.floor(Math.random() * 20) + 1;
+        }
+
+        function updatePage() {
+            // Hide all pages
+            const allPages = document.querySelectorAll('.page');
+            allPages.forEach(page => page.classList.remove('active'));
+
+            // Show the current page
+            const page = document.getElementById(`page-${currentPage}`);
+            if (page) {
+                page.classList.add('active');
+                setPageImage(currentPage);
+                if (currentPage !== 1) {
+                    document.getElementById('dice-result-text').style.display = 'none';
+                    document.getElementById('dice-result-image').style.display = 'none';
+                }
+                // If entering battle scene, prepare the battle
+                if (currentPage === 3) {
+                    prepareDragonBattle();
+                }
+            }
+
+            // Handle defeat page separately
+            if (currentPage === 'defeat') {
+                const defeatPage = document.getElementById('defeat');
+                if (defeatPage) {
+                    defeatPage.classList.add('active');
+                    setPageImage('defeat');
+                }
+            }
+
+            // Update the next button's disabled state
+            const nextButton = document.getElementById('next-button');
+            if (currentPage === totalPages || (currentPage === 3 && dragonHP > 0)) {
+                nextButton.disabled = true;
+            } else {
+                nextButton.disabled = false;
+            }
+
+            updateStatus();
+        }
+
+        function setPageImage(pageNumber) {
+            const page = document.getElementById(`page-${pageNumber}`);
+            if (!page) return;
+            const imgElement = page.querySelector('img');
+            if (imgElement) {
+                if (pageImages[pageNumber] && pageImages[pageNumber].length > 0) {
+                    const images = pageImages[pageNumber];
+                    imgElement.src = images[0];
+                }
+            }
+        }
+
+        function nextPage() {
+            if (currentPage < totalPages) {
+                if (currentPage === 1) {
+                    document.getElementById('next-prompt').textContent = "次は鍛冶屋に向かい、武器を作ってもらいます。";
+                    animateDiceRollForWeapon();
+                } else if (currentPage === 2) {
+                    document.getElementById('next-prompt').textContent = "鍛冶屋で武器を作ってもらい、戦いに備えます。";
+                    animateDiceRollForWeapon(); // 鍛冶屋でもダイスを振る
+                } else if (currentPage === 3 && dragonHP <= 0 && playerHP > 0) {
+                    currentPage++;
+                    updatePage();
+                    document.getElementById('next-prompt').textContent = "村に戻り、勝利を祝います。";
+                    showEnding();
+                } else {
+                    currentPage++;
+                    updatePage();
+                }
+            }
+            const nextButton = document.getElementById('next-button');
+            if (currentPage === totalPages || (currentPage === 3 && dragonHP > 0)) {
+                nextButton.disabled = true;
+            } else {
+                nextButton.disabled = false;
+            }
+        }
+
+        function animateDiceRollForWeapon() {
+            const diceAnimation = document.getElementById('dice-animation');
+            const resultText = document.getElementById('dice-result-text');
+            const diceResultImage = document.getElementById('dice-result-image');
+
+            diceAnimation.style.display = 'block';
+            diceAnimation.textContent = 'ダイスを振っています...';
+            resultText.textContent = '';
+            diceResultImage.style.display = 'none';
+
+            setTimeout(() => {
+                turnCount++;
+                const result = rollDice();
+                const effectiveResult = result + winRateModifier / 10;
+                const outcome = effectiveResult >= 10 ? '成功' : '失敗';
+                const imagePath = outcome === '成功' ? 'victory_scene.png' : 'failure_scene.png'; // 失敗時は一般的な失敗画像を使用
+
+                diceAnimation.style.display = 'none';
+                resultText.textContent = `ダイスの結果: ${result} + 勝率修正 (${winRateModifier}%) = ${effectiveResult.toFixed(1)} (${outcome})`;
+                diceResultImage.src = imagePath;
+                diceResultImage.alt = outcome;
+                diceResultImage.style.display = 'block';
+                resultText.style.display = 'block';
+
+                if (outcome === '成功') {
+                    equipment = "鋼の剣";
+                    winRateModifier = 25;
+                    currentPage++;
+                    updatePage();
+                } else {
+                    resultText.textContent += ' - 武器の取得に失敗しました。再挑戦してください。';
+                    // 失敗時にページ遷移しないため、currentPageをそのままに
+                }
+                updateStatus();
+            }, 2000);
+        }
+
+        function prepareDragonBattle() {
+            const battleLog = document.getElementById('battle-log');
+            battleLog.innerHTML = '<p>勇者はついにドラゴンと対峙しました。ドラゴンとの戦いが始まります！</p><strong>ドラゴンとの戦いが始まった！</strong><br>';
+            playerHP = 100;
+            dragonHP = 150;
+            turnCount = 0;
+            updateStatus();
+            setTimeout(() => {
+                document.getElementById('turn-button').style.display = 'block';
+            }, 1000);
+        }
+
+        function nextTurn() {
+            const battleLog = document.getElementById('battle-log');
+            const turnButton = document.getElementById('turn-button');
+
+            turnButton.disabled = true; // 連打防止のためボタンを一時的に無効化
+
+            setTimeout(() => {
+                turnCount++;
+                if (playerHP <= 0 || dragonHP <= 0) {
+                    if (playerHP <= 0) {
+                        logBattleEvent('<strong>勇者は倒された... 敗北...</strong>');
+                        turnButton.style.display = 'none';
+                        currentPage = 'defeat';
+                        updatePage();
+                    } else if (dragonHP <= 0) {
+                        logBattleEvent('<strong>ドラゴンを倒した！ 勝利！</strong>');
+                        turnButton.style.display = 'none';
+                        document.getElementById('next-button').disabled = false;
+                    }
+                    return;
+                }
+
+                const playerRoll = rollDice() + winRateModifier / 10;
+                const dragonRoll = rollDice();
+
+                if (playerRoll >= 10) {
+                    const playerDamage = Math.floor(Math.random() * 10) + 10;
+                    dragonHP -= playerDamage;
+                    if (dragonHP < 0) dragonHP = 0;
+                    logBattleEvent(`勇者の攻撃がヒット！ ドラゴンに<span style="color: red;">${playerDamage}ダメージ</span>！（ドラゴンのHP: ${dragonHP}）`);
+                } else {
+                    logBattleEvent('<span style="color: orange;">勇者の攻撃は外れた...</span>');
+                }
+
+                if (dragonHP > 0 && dragonRoll >= 12) {
+                    const dragonDamage = Math.floor(Math.random() * 10) + 5;
+                    playerHP -= dragonDamage;
+                    if (playerHP < 0) playerHP = 0;
+                    logBattleEvent(`ドラゴンの攻撃がヒット！ 勇者に<span style="color: red;">${dragonDamage}ダメージ</span>！（勇者のHP: ${playerHP}）`);
+                } else if (dragonHP > 0) {
+                    logBattleEvent('<span style="color: orange;">ドラゴンの攻撃は外れた...</span>');
+                }
+                updateStatus();
+                turnButton.disabled = false; // ボタンを再度有効化
+            }, 1000);
+        }
+
+        function logBattleEvent(message) {
+            const battleLog = document.getElementById('battle-log');
+            const newMessage = document.createElement('p');
+            newMessage.innerHTML = message;
+            battleLog.appendChild(newMessage);
+            battleLog.scrollTop = battleLog.scrollHeight;
+        }
+
+        function updateStatus() {
+            const equipmentElement = document.getElementById('equipment-status');
+            const winRateElement = document.getElementById('win-rate-status');
+            const playerHPElement = document.getElementById('player-hp-status');
+            const dragonHPElement = document.getElementById('dragon-hp-status');
+            const turnCountElement = document.getElementById('turn-count-status');
+
+            equipmentElement.textContent = `現在の装備: ${equipment}`;
+            winRateElement.textContent = `現在の勝率修正: ${winRateModifier}%`;
+            playerHPElement.textContent = `勇者のHP: ${playerHP}`;
+            dragonHPElement.textContent = `ドラゴンのHP: ${dragonHP}`;
+            turnCountElement.textContent = `累積ターン数: ${turnCount}`;
+        }
+
+        function showEnding() {
+            const endingTurnCount = document.getElementById('ending-turn-count');
+            const titleElement = document.getElementById('ending-title');
+            if (endingTurnCount) {
+                endingTurnCount.textContent = turnCount;
+            }
+            if (titleElement) {
+                let title = "勇者";
+                if (turnCount <= 10) {
+                    title = "速攻の勇者";
+                } else if (turnCount <= 20) {
+                    title = "巧妙なる勇者";
+                } else {
+                    title = "粘り強い勇者";
+                }
+                titleElement.textContent = title;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updatePage();
+        });
+    </script>
+</head>
+<body>
+    <div id="version-number">修正版 1.9</div>
+    <div id="status-container">
+        <p id="equipment-status">現在の装備: 木の棒</p>
+        <p id="win-rate-status">現在の勝率修正: 0%</p>
+        <p id="player-hp-status">勇者のHP: 100</p>
+        <p id="dragon-hp-status">ドラゴンのHP: 150</p>
+        <p id="turn-count-status">累積ターン数: 0</p>
+    </div>
+    
+    <div id="story-container">
+        <div class="page active" id="page-1">
+            <img src="village_scene_1.png" alt="村の風景" class="centered-image">
+            <p>ある日、勇者は小さな村に到着しました。村人たちは、最近現れたドラゴンの話をしていました。</p>
+            <p id="next-prompt">次は鍛冶屋に向かい、武器を作ってもらいます...</p>
+        </div>
+        <div class="page" id="page-2">
+            <img src="hero_blacksmith_1.png" alt="鍛冶屋で剣を手に入れる勇者" class="centered-image">
+            <p>勇者はドラゴンに立ち向かうために、鍛冶屋で新しい剣を手に入れました。村の外れにドラゴンの巣があると聞きます。</p>
+            <p id="next-prompt">次はドラゴンとの激しい戦いです...</p>
+        </div>
+        <div class="page" id="page-3">
+            <img src="dragon_lair_1.png" alt="ドラゴンの巣に到着した勇者" class="centered-image">
+            <p>ついに勇者はドラゴンの巣に到着しました。巨大なドラゴンが彼を待ち受けています。</p>
+            <div id="success-criteria">成功基準: ダイスの目 + 勝率修正 ≥ <strong>10</strong>で成功</div>
+            <div id="battle-log"></div>
+            <button id="turn-button" onclick="nextTurn()" style="display: none;">次のターン</button>
+        </div>
+        <div class="page" id="page-4">
+            <h2 id="ending-title">勇者</h2>
+            <img src="ending_scene_1.png" alt="エンディング" class="centered-image">
+            <p>勇者はついにドラゴンを打ち倒し、村に平和を取り戻しました。村人たちは勇者を英雄として讃え、盛大な祝宴が開かれました。</p>
+            <p>これにより、勇者の冒険はひとまず終わりを迎えました。しかし、彼の伝説は語り継がれ、次なる冒険への序章となることでしょう。</p>
+            <p>累積ターン数: <span id="ending-turn-count">0</span></p>
+        </div>
+        <div class="page" id="defeat">
+            <img src="defeat_scene_1.png" alt="敗北" class="centered-image">
+            <p>勇者はドラゴンに敗れ、命を落としてしまいました。村は再びドラゴンの脅威にさらされることとなりました。</p>
+        </div>
+    </div>
+    <div class="button-container">
+        <button id="next-button" onclick="nextPage()">次へ</button>
+    </div>
+    <div id="dice-animation">ダイスを振っています...</div>
+    <p id="dice-result-text"></p>
+    <img id="dice-result-image" src="" alt="" class="centered-image" style="width:50%; height:auto; display:none;">
+</body>
+</html>
